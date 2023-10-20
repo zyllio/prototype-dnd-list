@@ -11,8 +11,6 @@ export class DndListDirective implements OnInit {
 
   @Output() moved: EventEmitter<number> = new EventEmitter();
 
-  @Input() margin = 0;
-
   @Input() zoom = 1;
 
   constructor(private element: ElementRef) {
@@ -20,98 +18,122 @@ export class DndListDirective implements OnInit {
 
   ngOnInit(): void {
 
-    setTimeout(() => {
-      this.register();
+    const listElement: HTMLElement = this.element.nativeElement;
+
+    const children = Array.from(listElement.children)
+
+    children.forEach(itemElement => {
+      this.registerItem(listElement, itemElement as HTMLElement)
     })
   }
 
-  register() {
-
-    const source: HTMLElement = this.element.nativeElement;
+  registerItem(listElement: HTMLElement, itemElement: HTMLElement) {
 
     const mouseup = fromEvent<MouseEvent>(document, 'mouseup');
     const mousemove = fromEvent<MouseEvent>(document, 'mousemove');
-    const mousedown = fromEvent<MouseEvent>(source, 'mousedown');
+    const mousedown = fromEvent<MouseEvent>(itemElement, 'mousedown');
 
-    this.refresh(source);
+    const siblings = this.getSiblings(listElement)
 
     const mousedrag = mousedown.pipe(
 
       mergeMap((md: MouseEvent) => {
 
-        let startSourceTop = source.offsetTop;
+        const { clientX: startX, clientY: startY } = md
 
-        const siblings = this.getSiblings(source);
+        siblings.forEach((sibling, siblingIndex) => {
 
-        const startSourceIndex = siblings.findIndex(c => c === source);
+          // Don't use a filter here
+          if (sibling === itemElement) {
+            return;
+          }
 
-        const startX = md.clientX
-        
-        const startY = md.clientY
+          sibling.style.zIndex = '1';
+          sibling.style.transition = 'transform 0.1s ease';
+
+        });
+
+        let freeIndex = this.getItemIndex(listElement, itemElement)
+
 
         return mousemove.pipe(
-          
+
           /* Workaround for Shadow virtual desktop */
           filter((mm: MouseEvent) => mm.clientX !== startX || mm.clientY !== startY),
           map((mm: MouseEvent) => {
 
-          source.style.transition = 'none';
-          source.style.zIndex = '1000';
-          source.style.pointerEvents = 'none'
-          source.classList.add('dragging')
+            itemElement.style.transition = 'none';
+            itemElement.style.zIndex = '1000';
+            itemElement.style.pointerEvents = 'none'
+            itemElement.classList.add('dragging')
 
-          const top = (mm.clientY - startY) / this.zoom
+            const top = (mm.clientY - startY) / this.zoom
 
-          source.style.top = (startSourceTop + top) + 'px';
+            itemElement.style.transform = `translateY(${top}px)`
 
-          const shift = Math.round(top / this.getItemHeight(source));
+            let interectSibling: HTMLElement | undefined = undefined
 
-          let newIndex = startSourceIndex + shift;
+            // Look for intersection
+            siblings.forEach((sibling, siblingIndex) => {
 
-          // Fix Boundaries
-          newIndex = this.restrictToBoundaries(siblings, newIndex);
+              // Don't use a filter here
+              if (sibling === itemElement) {
+                return;
+              }
 
-          const sourceIndex = siblings.findIndex(c => c === source);
+              if (this.intersectRect(itemElement, sibling)) {
+                interectSibling = sibling
+              }
 
-          if (newIndex !== sourceIndex) {
+            })
 
-            const otherSibling = siblings[newIndex];
+            // console.log('interectSibling', interectSibling)
 
-            // Swap items
-            siblings[newIndex] = source;
-            siblings[sourceIndex] = otherSibling;
+            const intersectIndex = this.getItemIndex(listElement, interectSibling!)
 
-            this.moved.emit(newIndex);
-          }
 
-          siblings.forEach((sibling, index) => {
+            console.log('intersectIndex', intersectIndex)
 
-            // Don't use a filter here
-            if (sibling === source) {
-              return;
-            }
+            siblings.forEach((sibling, siblingIndex) => {
 
-            // Layer fix
-            sibling.style.zIndex = '1';
+              // Don't use a filter here
+              if (sibling === itemElement) {
+                return;
+              }
 
-            sibling.style.top = this.margin + (index * this.getItemHeight(source)) + 'px';
-          });
+              if (siblingIndex === intersectIndex) {
+                console.log('siblingIndex === intersectIndex', siblingIndex === intersectIndex)
 
-        }),
+                const top2 = (freeIndex < siblingIndex) ? '-60' : '60'
+
+                sibling.style.transform = `translateY(${top2}px)`
+
+                freeIndex = siblingIndex
+              }
+            })
+
+          }),
           takeUntil(mouseup),
           finalize(() => {
 
-            this.refresh(source);
+            itemElement.style.pointerEvents = 'all'
 
-            source.style.pointerEvents = 'all'
-
-            source.classList.remove('dragging')
+            itemElement.classList.remove('dragging')
           }));
       })
     );
 
     mousedrag.subscribe(() => {
     });
+  }
+
+  private intersectRect(item1: HTMLElement, item2: HTMLElement) {
+
+    const proxyRect = item1.getBoundingClientRect();
+    const dropRect = item2.getBoundingClientRect();
+
+    return Math.max(proxyRect.left, dropRect.left) < Math.min(proxyRect.left + proxyRect.width, dropRect.left + dropRect.width) &&
+      Math.max(proxyRect.top, dropRect.top) < Math.min(proxyRect.top + proxyRect.height, dropRect.top + dropRect.height);
   }
 
   private restrictToBoundaries(array: any[], index: number): number {
@@ -122,33 +144,15 @@ export class DndListDirective implements OnInit {
     return newIndex;
   }
 
-  private getSiblings(source: HTMLElement) {
-    return Array.from(source.parentElement.children) as HTMLElement[];
+  private getSiblings(listElement: HTMLElement) {
+    return Array.from(listElement.children) as HTMLElement[];
   }
 
-  /* Layout all chidren items using absolute coordinates */
-  private refresh(source: HTMLElement, ignoreMe = false) {
+  private getItemIndex(listElement: HTMLElement, itemElement: HTMLElement) {
 
-    let siblings = this.getSiblings(source)
+    const siblings = this.getSiblings(listElement)
 
-    if (ignoreMe === true) {
-      siblings = siblings.filter(s => s !== source)
-    }
-
-    siblings.forEach((sibling, index) => {
-
-      sibling.style.zIndex = 'unset';
-      sibling.style.transition = 'top 0.2s ease';
-      sibling.style.position = 'absolute';
-      sibling.style.left = '0';
-      sibling.style.right = '0';
-      sibling.style.top = this.margin + (index * this.getItemHeight(source)) + 'px';
-    });
-
-    source.parentElement.style.height = this.margin + siblings.length * this.getItemHeight(source) + 'px';
+    return siblings.findIndex(c => c === itemElement)
   }
 
-  private getItemHeight(source: HTMLElement) {
-    return source.offsetHeight + this.margin;
-  }
 }
