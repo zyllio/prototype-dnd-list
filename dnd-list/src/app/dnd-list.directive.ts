@@ -1,4 +1,4 @@
-import { Directive, ElementRef, Output, EventEmitter, Input, OnInit, OnDestroy, ApplicationRef } from '@angular/core';
+import { Directive, ElementRef, Output, EventEmitter, Input, OnInit, OnDestroy, ApplicationRef, ViewChildren, AfterViewInit } from '@angular/core';
 
 import { fromEvent } from 'rxjs';
 import { map, takeUntil, finalize, mergeMap, filter } from 'rxjs/operators';
@@ -7,22 +7,24 @@ import { map, takeUntil, finalize, mergeMap, filter } from 'rxjs/operators';
 @Directive({
   selector: '[app-dnd-list]'
 })
-export class DndListDirective implements OnInit {
+export class DndListDirective implements AfterViewInit {
 
-  @Output() moved: EventEmitter<number> = new EventEmitter();
+  @Output() moved: EventEmitter<{ item: number, position: number }> = new EventEmitter();
 
   @Input() zoom = 1;
+
+  // @ViewChildren(ChildDirective) viewChildren!: QueryList<ChildDirective>;
 
   constructor(private element: ElementRef) {
   }
 
-  ngOnInit(): void {
+  ngAfterViewInit() {
 
     const listElement: HTMLElement = this.element.nativeElement;
 
     const children = Array.from(listElement.children)
 
-    children.forEach(itemElement => {
+    children.forEach((itemElement) => {
       this.registerItem(listElement, itemElement as HTMLElement)
     })
   }
@@ -34,6 +36,8 @@ export class DndListDirective implements OnInit {
     const mousedown = fromEvent<MouseEvent>(itemElement, 'mousedown');
 
     const siblings = this.getSiblings(listElement)
+
+    const itemIndex = this.getItemIndex(listElement, itemElement)
 
     const mousedrag = mousedown.pipe(
 
@@ -49,12 +53,11 @@ export class DndListDirective implements OnInit {
           }
 
           sibling.style.zIndex = '1';
-          sibling.style.transition = 'transform 0.1s ease';
+          sibling.style.transition = 'transform 0.2s ease';
 
-        });
+        })
 
-        let freeIndex = this.getItemIndex(listElement, itemElement)
-
+        let newPosition = itemIndex
 
         return mousemove.pipe(
 
@@ -91,6 +94,7 @@ export class DndListDirective implements OnInit {
 
             const intersectIndex = this.getItemIndex(listElement, interectSibling!)
 
+            const oldPosition = newPosition
 
             console.log('intersectIndex', intersectIndex)
 
@@ -102,57 +106,82 @@ export class DndListDirective implements OnInit {
               }
 
               if (siblingIndex === intersectIndex) {
-                console.log('siblingIndex === intersectIndex', siblingIndex === intersectIndex)
-
-                const top2 = (freeIndex < siblingIndex) ? '-60' : '60'
-
-                sibling.style.transform = `translateY(${top2}px)`
-
-                freeIndex = siblingIndex
+                newPosition = siblingIndex
               }
             })
 
+            // Move items
+            siblings.forEach((sibling, siblingIndex) => {
+
+              // Don't use a filter here
+              if (sibling === itemElement) {
+                return;
+              }
+
+              if(siblingIndex === newPosition) {
+
+                const top2 = (top < 0) ? '60' : '-60'
+
+                sibling.style.transform = `translateY(${top2}px)`
+              }
+
+              // if(newPosition > oldPosition) {
+
+              // }
+
+
+
+            })
+
+
           }),
-          takeUntil(mouseup),
-          finalize(() => {
+      takeUntil(mouseup),
+      finalize(() => {
 
-            itemElement.style.pointerEvents = 'all'
+        itemElement.style.pointerEvents = 'all'
 
-            itemElement.classList.remove('dragging')
-          }));
-      })
+        itemElement.classList.remove('dragging')
+
+        this.moved.emit({ item: itemIndex, position: newPosition })
+
+        siblings.forEach((sibling, siblingIndex) => {
+          sibling.style.transform = `none`
+          sibling.style.transition = `none`
+        })
+      }));
+  })
     );
 
     mousedrag.subscribe(() => {
-    });
+});
   }
 
   private intersectRect(item1: HTMLElement, item2: HTMLElement) {
 
-    const proxyRect = item1.getBoundingClientRect();
-    const dropRect = item2.getBoundingClientRect();
+  const proxyRect = item1.getBoundingClientRect();
+  const dropRect = item2.getBoundingClientRect();
 
-    return Math.max(proxyRect.left, dropRect.left) < Math.min(proxyRect.left + proxyRect.width, dropRect.left + dropRect.width) &&
-      Math.max(proxyRect.top, dropRect.top) < Math.min(proxyRect.top + proxyRect.height, dropRect.top + dropRect.height);
-  }
+  return Math.max(proxyRect.left, dropRect.left) < Math.min(proxyRect.left + proxyRect.width, dropRect.left + dropRect.width) &&
+    Math.max(proxyRect.top, dropRect.top) < Math.min(proxyRect.top + proxyRect.height, dropRect.top + dropRect.height);
+}
 
   private restrictToBoundaries(array: any[], index: number): number {
 
-    let newIndex = (index < 0) ? 0 : index;
-    newIndex = (newIndex > array.length - 1) ? array.length - 1 : newIndex;
+  let newIndex = (index < 0) ? 0 : index;
+  newIndex = (newIndex > array.length - 1) ? array.length - 1 : newIndex;
 
-    return newIndex;
-  }
+  return newIndex;
+}
 
   private getSiblings(listElement: HTMLElement) {
-    return Array.from(listElement.children) as HTMLElement[];
-  }
+  return Array.from(listElement.children) as HTMLElement[];
+}
 
   private getItemIndex(listElement: HTMLElement, itemElement: HTMLElement) {
 
-    const siblings = this.getSiblings(listElement)
+  const siblings = this.getSiblings(listElement)
 
-    return siblings.findIndex(c => c === itemElement)
-  }
+  return siblings.findIndex(c => c === itemElement)
+}
 
 }

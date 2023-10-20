@@ -6,4 +6,18 @@ import { Component } from '@angular/core';
   styleUrls: ['./app.component.css']
 })
 export class AppComponent {
+
+  items = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']
+
+  moved({ item, position }: { item: number, position: number }) {
+    console.log("item, position ", item, position);
+
+    const element = this.items.splice(item, 1)[0]
+
+    this.items.splice(position, 0, element)
+    
+ console.log("this.items ", this.items);
+
+
+  }
 }

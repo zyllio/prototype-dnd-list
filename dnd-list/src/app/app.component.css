@@ -7,9 +7,9 @@
 
 .item {
     display: flex;
-    align-items: center; 
+    align-items: center;
     justify-content: center;
-    height: 60px;
+    height: 54px;
     background-color: green;
     color: white;
     border-radius: 5px;
