@@ -1,5 +1,8 @@
-
-
 <div class="items" app-dnd-list (moved)="moved($event)">
-  <div class="item" app-dnd-list-item *ngFor="let item of items; let index = index">{{ item }}({{ index }})</div>
+  <div class="item" app-dnd-list-item *ngFor="let item of items; let index = index">
+
+    {{ item }}
+
+  </div>
 </div>
+
