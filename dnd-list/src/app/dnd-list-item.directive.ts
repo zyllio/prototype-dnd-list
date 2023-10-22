@@ -4,7 +4,7 @@ import { Subscription, fromEvent } from 'rxjs';
 import { map, takeUntil, finalize, mergeMap, filter } from 'rxjs/operators';
 import { DndListDirective } from './dnd-list.directive';
 
-const shift = 60
+const height = 60
 
 @Directive({
   selector: '[app-dnd-list-item]'
@@ -51,9 +51,9 @@ export class DndListItemDirective implements AfterViewInit {
 
         let newPosition = itemIndex
 
-        let interectSibling: HTMLElement | undefined = undefined
+        let previousInterectSibling: HTMLElement | undefined = undefined
 
-        let orientation = 0
+        let previousOrientation = 0
 
         return mousemove.pipe(
 
@@ -82,18 +82,23 @@ export class DndListItemDirective implements AfterViewInit {
               const newOrientation = mm.movementY / Math.abs(mm.movementY)
 
               if (this.intersectRect(itemElement, sibling)
-                && (interectSibling !== sibling || (interectSibling === sibling && newOrientation !== orientation))) {
+                && (previousInterectSibling !== sibling || (previousInterectSibling === sibling && newOrientation !== previousOrientation))) {
 
-                interectSibling = sibling
+                previousInterectSibling = sibling
 
-                newPosition = siblingIndex
-
-                orientation = mm.movementY / Math.abs(mm.movementY)
+                previousOrientation = newOrientation
 
                 if (newOrientation > 0) {
-                  this.shiftUp(sibling)
+
+                  const initial = this.shift(sibling, -height)
+
+                  newPosition = (initial) ? (siblingIndex + 1) : siblingIndex
+
                 } else {
-                  this.shiftDown(sibling)
+
+                  const initial = this.shift(sibling, height)
+
+                  newPosition = (initial) ? (siblingIndex - 1) : siblingIndex
                 }
               }
             })
@@ -124,31 +129,21 @@ export class DndListItemDirective implements AfterViewInit {
     this.subscription.unsubscribe()
   }
 
-  shiftUp(element: HTMLElement) {
+  shift(element: HTMLElement, height: number): boolean {
 
     const transform = element.style.transform
 
     if (transform === '') {
 
-      element.style.transform = `translateY(-${shift}px)`
+      element.style.transform = `translateY(${height}px)`
 
-    } else if (transform === `translateY(${shift}px)`) {
+      return false
 
-      element.style.transform = ''
-    }
-  }
-
-  shiftDown(element: HTMLElement) {
-
-    const transform = element.style.transform
-
-    if (transform === '') {
-
-      element.style.transform = `translateY(${shift}px)`
-
-    } else if (transform === `translateY(-${shift}px)`) {
+    } else {
 
       element.style.transform = ''
+
+      return true
     }
   }
 

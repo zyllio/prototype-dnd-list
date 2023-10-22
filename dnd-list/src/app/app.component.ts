@@ -15,9 +15,16 @@ export class AppComponent {
     const element = this.items.splice(item, 1)[0]
 
     this.items.splice(position, 0, element)
+
     
- console.log("this.items ", this.items);
+    console.log('this.items', this.items)
 
 
+
+  }
+
+  delete(index: number) {
+    console.log('delete(index', index)
+    this.items.splice(index, 1)
   }
 }
